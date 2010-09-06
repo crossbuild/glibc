@@ -1,3 +1,7 @@
+2010-09-06  Andreas Schwab  <schwab@redhat.com>
+
+	* manual/Makefile: Don't mix pattern rules with normal rules.
+
 2007-07-31  Jakub Jelinek  <jakub@redhat.com>
 
 	* NEWS, version.h (VERSION): 2.5.1.
