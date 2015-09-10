@@ -24,46 +24,53 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <sys/param.h>
-#include "tunables.h"
+#include <atomic.h>
 
 extern char **__environ;
+static int initialized = 0;
 
-/* A tunable.  */
-struct _tunable
+#define TUNABLES_INTERNAL 1
+#include "tunables.h"
+
+/* The string is a space separated list of name=value for each tunable.  */
+static void
+parse_tunable_string (const char *str)
 {
-  char *name;
-  char *alias;
-  union
+  char *input = strdup (str);
+  char *in = input;
+
+  while (input != NULL)
     {
-      int ns_size;
-      tunable_setter_t set;
-    } data;
-#define set data.set
-#define ns_size data.ns_size
-  bool initialized;
-  bool enable_secure;
-};
+      char *end = strchr (input, ' ');
 
-/* The full list of tunables.  */
-static tunable_t tunable_list[TUNABLES_MAX];
+      if (end != NULL)
+	*end++ = '\0';
 
+      char *equals = strchr (input, '=');
+      if (equals != NULL)
+	{
+	  *equals++ = '\0';
+	  for (int i = 0; i < sizeof (tunable_list) / sizeof (tunable_t); i++)
+	    {
+	      if (strcmp (input, tunable_list[i].name) == 0)
+		{
+		  tunable_list[i].val = strdup (equals);
+		  break;
+		}
+	    }
+	}
 
-void
-tunables_namespace_begin (tunable_id_t id, size_t size)
-{
-  tunable_list[id].ns_size = size;
+      input = end;
+    }
+
+  free (in);
 }
 
-/* Initialize all tunables in the namespace group specified by ID.  */
-void
-tunables_init (tunable_id_t id)
+static void
+tunables_init (char **env)
 {
-  int end = tunable_list[id].ns_size;
-
-  /* Traverse through the environment to find environment variables we may need
-     to set.  */
-  char **envp = __environ;
-  while (*envp != NULL)
+  char **envp = env;
+  while (envp != NULL && *envp != NULL)
     {
       char *envline = *envp;
       int len = 0;
@@ -75,41 +82,92 @@ tunables_init (tunable_id_t id)
       if (envline[len] == '\0')
 	continue;
 
-      for (int i = id + 1; i < end; i++)
+      const char *name = "GNU_LIBC_TUNABLES";
+
+      if (memcmp (envline, name, MIN(len, strlen (name))) == 0)
 	{
-	  /* Skip over tunables that are either initialized or are not safe to
-	     load for setuid binaries.  */
-	  if ((__libc_enable_secure && !tunable_list[i].enable_secure)
-	      || tunable_list[i].initialized)
-	    continue;
-
-	  const char *name = tunable_list[i].name;
-	  const char *alias = tunable_list[i].alias;
-	  char *val = NULL;
-
-	  if (memcmp (envline, name, MIN(len, strlen (name))) == 0)
-	    val = &envline[len + 1];
-	  else if (memcmp (envline, alias, MIN(len, strlen (alias))) == 0)
-	    val = &envline[len + 1];
-
-	  if (val != NULL)
-	    {
-	      tunable_list[i].set (val);
-	      tunable_list[i].initialized = true;
-	      break;
-	    }
+	  parse_tunable_string (&envline[len + 1]);
+	  break;
 	}
+
       envp++;
     }
 }
 
-/* Initialize a tunable and set its value via the set environment variable.  */
+/* Initialize all tunables in the namespace group specified by ID.  */
 void
-tunable_register (tunable_id_t id, const char *name, const char *alias,
-		  tunable_setter_t set_func, bool secure)
+compat_tunables_init_envvars (struct compat_tunable_env *envvars, int count)
 {
-  tunable_list[id].name = __strdup (name);
-  tunable_list[id].alias = alias ? __strdup (alias) : NULL;
-  tunable_list[id].set = set_func;
-  tunable_list[id].enable_secure = secure;
+  if (atomic_load_acquire (&initialized) == 0)
+    {
+      tunables_init (__environ);
+      atomic_store_release (&initialized, 1);
+    }
+
+  /* Traverse through the environment to find environment variables we may need
+     to set.  */
+  char **envp = __environ;
+  while (envp != NULL && *envp != NULL)
+    {
+      char *envline = *envp;
+      int len = 0;
+
+      while (envline[len] != '\0' && envline[len] != '=')
+	len++;
+
+      /* Just the name and no value.  */
+      if (envline[len] == '\0')
+	continue;
+
+      int init_count = 0;
+      for (int i = 0; i < count; i++)
+	{
+	  tunable_id_t t = envvars[i].id;
+	  tunable_t *cur = &tunable_list[t];
+
+	  /* Skip over tunables that have already been initialized.  */
+	  if (cur->initialized)
+	    {
+	      init_count++;
+	      continue;
+	    }
+
+	  const char *name = envvars[i].env;
+
+	  /* We have a match.  Initialize and move on to the next line.  */
+	  if (memcmp (envline, name, MIN(len, strlen (name))) == 0)
+	    {
+	      cur->val = strdup (&envline[len + 1]);
+	      cur->set (cur->val);
+	      cur->initialized = true;
+	      break;
+	    }
+	}
+
+      /* All of the tunable envvars have been initialized.  */
+      if (count == init_count)
+	break;
+
+      envp++;
+    }
+}
+
+/* Initialize a tunable and set its value.  */
+void
+tunable_register (tunable_id_t id, tunable_setter_t set_func)
+{
+  if (atomic_load_acquire (&initialized) == 0)
+    {
+      tunables_init (__environ);
+      atomic_store_release (&initialized, 1);
+    }
+
+  tunable_t *cur = &tunable_list[id];
+
+  cur->set = set_func;
+  if (cur->val != NULL)
+    {
+      set_func (cur->val);
+      cur->initialized = true;
+    }
 }

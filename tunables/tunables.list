@@ -1,12 +1,12 @@
-GLIBC {
-  MALLOC {
-    CHECK
-    TOP_PAD
-    PERTURB
-    MMAP_THRESHOLD
-    TRIM_THRESHOLD
-    MMAP_MAX
-    ARENA_MAX
-    ARENA_TEST
+glibc {
+  malloc {
+    check
+    top_pad
+    perturb
+    mmap_threshold
+    trim_threshold
+    mmap_max
+    arena_max
+    arena_test
   }
 }

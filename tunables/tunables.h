@@ -18,53 +18,74 @@
    License along with the GNU C Library; if not, see
    <http://www.gnu.org/licenses/>.  */
 
-#include "tunable-list.h"
-
 typedef void (*tunable_setter_t) (const char *);
+
+/* A tunable.  */
+struct _tunable
+{
+  const char *name;
+  const char *val;
+  tunable_setter_t set;
+  bool initialized;
+};
+
 typedef struct _tunable tunable_t;
 
-extern void tunables_namespace_begin (tunable_id_t, size_t);
-extern void tunable_register (tunable_id_t, const char *, const char *,
-			      tunable_setter_t, bool);
-extern void tunables_init (tunable_id_t);
+#include "tunable-list.h"
 
-/* Build a full tunable name from a top namespace, tunable namespace and the
-   id.  */
-#define FULL_NAME(top,ns,id) FULL_NAME1 (top,ns,id)
-#define FULL_NAME1(top,ns,id) (top ## _ ## ns ## _ ## id)
+struct compat_tunable_env
+{
+  tunable_id_t id;
+  const char *env;
+};
 
-#define FULL_NAME_S(top,ns,id) (#top "_" #ns "_" #id)
+extern void compat_tunables_init_envvars (struct compat_tunable_env *, int);
+extern void tunable_register (tunable_id_t, tunable_setter_t);
 
-#define NS_NAME(top, ns) NS_NAME1(top, ns)
-#define NS_NAME1(top, ns) (top ## _ ## ns)
+#define TUNABLE_REGISTER(ns,id,set) \
+  TUNABLE_REGISTER_FULL (TOP_NAMESPACE, ns, id, set)
+
+#define TUNABLE_REGISTER_FULL(tns,ns,id,set) \
+  tunable_register (TUNABLE_ENUM_NAME (tns, ns, id), (set))
+
+#define ADD_COMPAT_TUNABLE_ENV(__id,__env) \
+({									      \
+  envvars[envvars_cnt].id = TUNABLE_ENUM_NAME (TOP_NAMESPACE,		      \
+					       TUNABLE_NAMESPACE, __id);      \
+  envvars[envvars_cnt++].env = (__env);					      \
+})
 
 /* Start registering tunables in the current namespace.  */
-#define TUNABLES_NAMESPACE_BEGIN(size) \
-  tunables_namespace_begin (NS_NAME(TOP_NAMESPACE, TUNABLE_NAMESPACE), size)
+#define COMPAT_TUNABLES_NAMESPACE_BEGIN(size) \
+  {									      \
+    struct compat_tunable_env envvars[size];				      \
+    int envvars_cnt = 0;
 
 /* Register a tunable.  This macro validates that the call is OK and then calls
    tunable_init to do the real work of adding the tunable and setting its value
    based on its environment variable(s).  */
-#define TUNABLE_REGISTER(id,alias,set) \
+#define COMPAT_TUNABLE_REGISTER(id,env,set) \
 ({									      \
-  tunable_register (FULL_NAME (TOP_NAMESPACE, TUNABLE_NAMESPACE, id),	      \
-		    FULL_NAME_S (TOP_NAMESPACE, TUNABLE_NAMESPACE, id),	      \
-		    (alias), (set), false);				      \
-									      \
+  assert (envvars_cnt < (sizeof (envvars)				      \
+		      / sizeof (struct compat_tunable_env)));		      \
+  if (!__libc_enable_secure)						      \
+    ADD_COMPAT_TUNABLE_ENV(id, env);					      \
+  TUNABLE_REGISTER (TUNABLE_NAMESPACE, id, set);			      \
 })
 
 /* Does exactly the same thing as TUNABLE_REGISTER, except that it allows the
    tunable to look for environment variable values even for setuid binaries.
    This is a separate macro and not just another parameter in TUNABLE_REGISTER
    to avoid accidentally setting a secure flag where it is not required.  */
-#define TUNABLE_REGISTER_SECURE(id,alias,set) \
+#define COMPAT_TUNABLE_REGISTER_SECURE(id,env,set) \
 ({									      \
-  tunable_register (FULL_NAME (TOP_NAMESPACE, TUNABLE_NAMESPACE, id),	      \
-		    FULL_NAME_S (TOP_NAMESPACE, TUNABLE_NAMESPACE, id),	      \
-		    (alias), (set), true);				      \
-									      \
+  assert (envvars_cnt < (sizeof (envvars)			      \
+		      / sizeof (struct compat_tunable_env)));		      \
+  ADD_COMPAT_TUNABLE_ENV(id, env);					      \
+  TUNABLE_REGISTER (TUNABLE_NAMESPACE, id, set);			      \
 })
 
 /* Initialize tunables in the namespace.  */
-#define TUNABLES_NAMESPACE_INIT() \
-  tunables_init (NS_NAME (TOP_NAMESPACE, TUNABLE_NAMESPACE))
+#define COMPAT_TUNABLES_NAMESPACE_INIT() \
+    compat_tunables_init_envvars (envvars, envvars_cnt);   \
+  }

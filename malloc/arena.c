@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 
-#define TUNABLE_NAMESPACE MALLOC
+#define TUNABLE_NAMESPACE malloc
 #include <tunables/tunables.h>
 
 /* Compile-time constants.  */
@@ -398,20 +398,26 @@ ptmalloc_init (void)
   tsd_setspecific (arena_key, (void *) &main_arena);
   thread_atfork (ptmalloc_lock_all, ptmalloc_unlock_all, ptmalloc_unlock_all2);
 
-  TUNABLES_NAMESPACE_BEGIN (8);
+  COMPAT_TUNABLES_NAMESPACE_BEGIN (8);
 
-  TUNABLE_REGISTER_SECURE (CHECK, "MALLOC_CHECK_", tunable_set_mallopt_check);
-  TUNABLE_REGISTER (TOP_PAD, "MALLOC_TOP_PAD_", tunable_set_mallopt_top_pad);
-  TUNABLE_REGISTER (PERTURB, "MALLOC_PERTURB_", tunable_set_mallopt_perturb);
-  TUNABLE_REGISTER (MMAP_THRESHOLD, "MALLOC_MMAP_THRESHOLD_",
-		    tunable_set_mallopt_mmap_threshold);
-  TUNABLE_REGISTER (TRIM_THRESHOLD, "MALLOC_TRIM_THRESHOLD_",
-		    tunable_set_mallopt_trim_threshold);
-  TUNABLE_REGISTER (MMAP_MAX, "MALLOC_MMAP_MAX_", tunable_set_mallopt_mmap_max);
-  TUNABLE_REGISTER (ARENA_MAX, "MALLOC_ARENA_MAX", tunable_set_mallopt_arena_max);
-  TUNABLE_REGISTER (ARENA_TEST, "MALLOC_ARENA_TEST", tunable_set_mallopt_arena_test);
+  COMPAT_TUNABLE_REGISTER_SECURE (check, "MALLOC_CHECK_",
+				  tunable_set_mallopt_check);
+  COMPAT_TUNABLE_REGISTER (top_pad, "MALLOC_TOP_PAD_",
+			   tunable_set_mallopt_top_pad);
+  COMPAT_TUNABLE_REGISTER (perturb, "MALLOC_PERTURB_",
+			   tunable_set_mallopt_perturb);
+  COMPAT_TUNABLE_REGISTER (mmap_threshold, "MALLOC_MMAP_THRESHOLD_",
+			   tunable_set_mallopt_mmap_threshold);
+  COMPAT_TUNABLE_REGISTER (trim_threshold, "MALLOC_TRIM_THRESHOLD_",
+			   tunable_set_mallopt_trim_threshold);
+  COMPAT_TUNABLE_REGISTER (mmap_max, "MALLOC_MMAP_MAX_",
+			   tunable_set_mallopt_mmap_max);
+  COMPAT_TUNABLE_REGISTER (arena_max, "MALLOC_ARENA_MAX",
+			   tunable_set_mallopt_arena_max);
+  COMPAT_TUNABLE_REGISTER (arena_test, "MALLOC_ARENA_TEST",
+			   tunable_set_mallopt_arena_test);
 
-  TUNABLES_NAMESPACE_INIT ();
+  COMPAT_TUNABLES_NAMESPACE_INIT ();
 
   void (*hook) (void) = atomic_forced_read (__malloc_initialize_hook);
   if (hook != NULL)

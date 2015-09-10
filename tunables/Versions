@@ -1,6 +1,7 @@
 # Exports from tunables should only be in the GLIBC_PRIVATE namespace.
 libc {
   GLIBC_PRIVATE {
-    tunable_init;
+    compat_tunables_init_envvars;
+    tunable_register;
   }
 }
