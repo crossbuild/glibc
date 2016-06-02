@@ -10,7 +10,7 @@ arm*)
   if test "${CFLAGS+set}" != "set"; then
     CFLAGS="-g -O2"
   fi
-  CFLAGS="$CFLAGS -fno-unwind-tables"
+  CFLAGS="$CFLAGS -fno-asynchronous-unwind-tables -fno-unwind-tables"
 
   base_machine=arm
   # Lets ask the compiler which ARM family we've got

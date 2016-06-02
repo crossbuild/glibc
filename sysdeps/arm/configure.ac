@@ -109,4 +109,4 @@ fi
 libc_cv_gcc_unwind_find_fde=no
 
 # Remove -fno-unwind-tables that was added in sysdeps/arm/preconfigure.ac.
-CFLAGS=${CFLAGS% -fno-unwind-tables}
+CFLAGS=${CFLAGS% -fno-asynchronous-unwind-tables -fno-unwind-tables}
